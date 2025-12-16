@@ -130,29 +130,87 @@ async def handle_telegram_link(client: Client, message: Message, link_text: str,
     """Handle file extraction from Telegram link"""
     # Parse Telegram link (t.me/channel/message_id or t.me/c/channel_id/message_id)
     try:
-        parts = link_text.split('/')
-        if 't.me/c/' in link_text:
-            # Private channel link
-            channel_id = int('-100' + parts[-2])
-            msg_id = int(parts[-1])
+        # Extract URL from text (in case there's extra text)
+        import re
+        url_match = re.search(r'https?://t\.me/\S+', link_text)
+        if url_match:
+            link = url_match.group(0)
         else:
-            # Public channel link
-            channel_username = parts[-2]
-            msg_id = int(parts[-1])
-            channel_id = channel_username
+            link = link_text.strip()
+        
+        # Remove query parameters and fragments
+        link = link.split('?')[0].split('#')[0]
+        
+        parts = link.rstrip('/').split('/')
+        
+        # Determine channel and message ID
+        if '/c/' in link:
+            # Private channel link: https://t.me/c/1234567890/123
+            try:
+                channel_idx = parts.index('c')
+                channel_id = int('-100' + parts[channel_idx + 1])
+                msg_id = int(parts[channel_idx + 2])
+            except (ValueError, IndexError):
+                await message.reply_text(
+                    "❌ Invalid private channel link format!\n\n"
+                    "Expected format: `https://t.me/c/1234567890/123`"
+                )
+                return
+        else:
+            # Public channel link: https://t.me/channelname/123
+            try:
+                # Find the channel username (second to last part) and message ID (last part)
+                if len(parts) >= 2:
+                    channel_username = parts[-2]
+                    msg_id = int(parts[-1])
+                    channel_id = f"@{channel_username}" if not channel_username.startswith('@') else channel_username
+                else:
+                    raise ValueError("Invalid link format")
+            except (ValueError, IndexError):
+                await message.reply_text(
+                    "❌ Invalid public channel link format!\n\n"
+                    "Expected format: `https://t.me/channelname/123`"
+                )
+                return
         
         # Get the message
-        file_msg = await client.get_messages(channel_id, msg_id)
+        try:
+            file_msg = await client.get_messages(channel_id, msg_id)
+        except Exception as e:
+            error_str = str(e).lower()
+            if 'peer_id_invalid' in error_str:
+                await message.reply_text(
+                    "❌ Cannot access this channel!\n\n"
+                    "**Possible reasons:**\n"
+                    "• Channel is private and bot is not a member\n"
+                    "• Bot hasn't interacted with this channel\n"
+                    "• Invalid channel ID\n\n"
+                    "**For private channels:**\n"
+                    "Make sure the bot is added to the channel as admin."
+                )
+            else:
+                await message.reply_text(f"❌ Error accessing message: {str(e)}")
+            return
         
         if not file_msg or not file_msg.document:
-            await message.reply_text("❌ No file found at the provided link!")
+            await message.reply_text(
+                "❌ No file found at the provided link!\n\n"
+                "Make sure the link points to a message with a file attachment."
+            )
             return
         
         # Process the file
         await handle_file_extraction(client, message, file_msg, password)
     
     except Exception as e:
-        await message.reply_text(f"❌ Error processing Telegram link: {str(e)}")
+        await message.reply_text(
+            f"❌ Error processing Telegram link!\n\n"
+            f"Error: {str(e)}\n\n"
+            f"**Make sure:**\n"
+            f"• Link format is correct\n"
+            f"• Bot has access to the channel\n"
+            f"• Message contains a file"
+        )
 
 
 async def handle_file_extraction(client: Client, message: Message, file_message: Message, password: str):
