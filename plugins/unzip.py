@@ -295,7 +295,37 @@ async def handle_file_extraction(client: Client, message: Message, file_message:
         # Extract archive
         try:
             await status_msg.edit_text("📂 Extracting archive...\n\nUse /cancel to stop")
-            success, extract_dir, error_msg = await extract_archive(file_path, password)
+            
+            # Start a task to update status every 5 seconds during extraction
+            extraction_running = True
+            async def update_extraction_status():
+                elapsed = 0
+                while extraction_running:
+                    await asyncio.sleep(5)
+                    if extraction_running:  # Check again after sleep
+                        elapsed += 5
+                        try:
+                            await status_msg.edit_text(
+                                f"📂 Extracting archive... ({elapsed}s)\n\n"
+                                f"Please wait, large files may take several minutes.\n\n"
+                                f"Use /cancel to stop"
+                            )
+                        except:
+                            pass
+            
+            # Start the status update task
+            status_task = asyncio.create_task(update_extraction_status())
+            
+            try:
+                success, extract_dir, error_msg = await extract_archive(file_path, password)
+            finally:
+                extraction_running = False
+                await asyncio.sleep(0.1)  # Give status task time to see the flag
+                status_task.cancel()
+                try:
+                    await status_task
+                except asyncio.CancelledError:
+                    pass
             
             if not success:
                 await status_msg.edit_text(error_msg or "❌ Extraction failed!")
@@ -338,6 +368,13 @@ async def handle_file_extraction(client: Client, message: Message, file_message:
         # Get log channel
         log_channel_id = await get_log_channel()
         
+        # Resolve log channel to populate peer cache (fixes "Peer id invalid" error)
+        if log_channel_id:
+            try:
+                await client.get_chat(log_channel_id)
+            except Exception:
+                log_channel_id = None  # Disable logging if channel is inaccessible
+        
         sent_count = 0
         for idx, file in enumerate(extracted_files, 1):
             # Check for cancellation before each file
@@ -375,21 +412,19 @@ async def handle_file_extraction(client: Client, message: Message, file_message:
                 if log_channel_id:
                     try:
                         await sent_msg.copy(log_channel_id)
-                    except Exception as e:
-                        print(f"Error forwarding to log channel: {e}")
+                    except Exception:
+                        pass  # Silently skip if log channel forward fails
                 
                 # Delete file only after BOTH sends complete successfully
                 try:
                     await asyncio.sleep(0.2)  # Small delay to ensure upload complete
                     if os.path.isfile(file):
                         os.remove(file)
-                except Exception as e:
-                    print(f"Error deleting file {file}: {e}")
+                except Exception:
+                    pass  # Silently skip if file deletion fails
                 
             except Exception as e:
-                error_msg = str(e)
-                print(f"Error sending file {file}: {error_msg}")
-                await message.reply_text(f"⚠️ Could not send file {idx}: {error_msg}")
+                await message.reply_text(f"⚠️ Could not send file {idx}: {str(e)}")
 
         
         # Increment quota
