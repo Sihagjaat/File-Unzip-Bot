@@ -1,9 +1,31 @@
 import os
 import shutil
+import asyncio
+from aiohttp import web
 from pyrogram import Client, filters
 from pyrogram.types import BotCommand
 from config import API_ID, API_HASH, BOT_TOKEN, DOWNLOAD_DIR
 from database.database import init_db
+
+# Health check port for Koyeb
+HEALTH_CHECK_PORT = int(os.environ.get("PORT", 8000))
+
+# Health check handlers
+async def health_check(request):
+    """Health check endpoint for Koyeb"""
+    return web.Response(text="OK", status=200)
+
+async def start_health_server():
+    """Start health check HTTP server"""
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    app.router.add_get("/health", health_check)
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", HEALTH_CHECK_PORT)
+    await site.start()
+    print(f"Health check server running on port {HEALTH_CHECK_PORT}")
 
 # Create downloads directory
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -52,6 +74,7 @@ async def set_bot_commands():
         BotCommand("start", "Start the bot"),
         BotCommand("help", "Get help and usage info"),
         BotCommand("unzip", "Extract archive file"),
+        BotCommand("settings", "Configure file upload settings"),
         BotCommand("myplan", "Check your current plan"),
         BotCommand("premium", "Purchase premium subscription"),
         BotCommand("redeem", "Redeem a premium code"),
@@ -72,6 +95,8 @@ if __name__ == "__main__":
     
     # Set commands when bot starts
     async def on_startup():
+        # Start health check server for Koyeb
+        await start_health_server()
         await set_bot_commands()
     
     app.start()

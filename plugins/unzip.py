@@ -365,6 +365,14 @@ async def handle_file_extraction(client: Client, message: Message, file_message:
             f"Use /cancel to stop"
         )
         
+        #Get user settings for file transformations
+        from database.user_settings_helper import get_user_settings
+        from utils.filename_transformer import transform_filename, substitute_caption_variables, apply_replacements, get_file_type
+        from utils.helpers import format_size
+        from pyrogram.types import MessageEntity
+        
+        settings = get_user_settings(user_id)
+        
         # Get log channel
         log_channel_id = await get_log_channel()
         
@@ -387,11 +395,93 @@ async def handle_file_extraction(client: Client, message: Message, file_message:
                 return
             
             try:
-                # Send to user WITHOUT caption (files sent as-is)
-                sent_msg = await client.send_document(
-                    chat_id=user_id,
-                    document=file
-                )
+                # Get original filename
+                original_name = os.path.basename(file)
+                
+                # Transform filename according to user settings
+                new_name = transform_filename(original_name, settings)
+                
+                # Rename file to new name
+                new_path = os.path.join(os.path.dirname(file), new_name)
+                if file != new_path:
+                    os.rename(file, new_path)
+                    file = new_path
+                
+                # Prepare caption if user has set custom caption
+                caption = None
+                caption_entities = None
+                
+                if settings.get('custom_caption'):
+                    # Get file size and extension
+                    file_size_bytes = os.path.getsize(file)
+                    file_ext = os.path.splitext(new_name)[1][1:] if '.' in new_name else ''
+                    
+                    # Prepare file info for variable substitution
+                    file_info = {
+                        'filename': new_name,
+                        'size': format_size(file_size_bytes),
+                        'extension': file_ext,
+                        'caption': ''  # Original caption if any
+                    }
+                    
+                    # Substitute variables in caption template
+                    caption = substitute_caption_variables(settings['custom_caption'], file_info)
+                    
+                    # Apply caption word replacements
+                    if settings.get('caption_replacements'):
+                        caption = apply_replacements(caption, settings['caption_replacements'])
+                    
+                    # Restore formatting entities if they exist
+                    if settings.get('caption_entities'):
+                        caption_entities = [
+                            MessageEntity(
+                                type=e['type'],
+                                offset=e['offset'],
+                                length=e['length']
+                            )
+                            for e in settings['caption_entities']
+                        ]
+                
+                # Send file according to upload type setting
+                sent_msg = None
+                
+                if settings.get('upload_as_document', True):
+                    # Send as document
+                    sent_msg = await client.send_document(
+                        chat_id=user_id,
+                        document=file,
+                        caption=caption,
+                        caption_entities=caption_entities,
+                        thumb=settings.get('thumbnail')
+                    )
+                else:
+                    # Send as media (photo/video) based on file type
+                    file_type = get_file_type(new_name)
+                    
+                    if file_type == 'photo':
+                        sent_msg = await client.send_photo(
+                            chat_id=user_id,
+                            photo=file,
+                            caption=caption,
+                            caption_entities=caption_entities
+                        )
+                    elif file_type == 'video':
+                        sent_msg = await client.send_video(
+                            chat_id=user_id,
+                            video=file,
+                            caption=caption,
+                            caption_entities=caption_entities,
+                            thumb=settings.get('thumbnail')
+                        )
+                    else:
+                        # Fall back to document for unknown types
+                        sent_msg = await client.send_document(
+                            chat_id=user_id,
+                            document=file,
+                            caption=caption,
+                            caption_entities=caption_entities,
+                            thumb=settings.get('thumbnail')
+                        )
                 
                 # Only count as sent after successful delivery to user
                 sent_count += 1
@@ -409,7 +499,7 @@ async def handle_file_extraction(client: Client, message: Message, file_message:
                 )
                 
                 # Forward to log channel
-                if log_channel_id:
+                if log_channel_id and sent_msg:
                     try:
                         await sent_msg.copy(log_channel_id)
                     except Exception:

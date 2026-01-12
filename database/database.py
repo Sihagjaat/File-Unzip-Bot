@@ -13,6 +13,7 @@ force_sub_channels_collection = db['force_sub_channels']
 bot_config_collection = db['bot_config']
 redeem_codes_collection = db['redeem_codes']
 ongoing_processes_collection = db['ongoing_processes']
+user_settings_collection = db['user_settings']
 
 
 def init_db():
@@ -23,6 +24,7 @@ def init_db():
     bot_config_collection.create_index("setting_name", unique=True)
     redeem_codes_collection.create_index("code", unique=True)
     ongoing_processes_collection.create_index("user_id")
+    user_settings_collection.create_index("user_id", unique=True)
     
     print("MongoDB initialized successfully!")
 

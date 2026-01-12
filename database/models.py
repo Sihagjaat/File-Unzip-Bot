@@ -64,4 +64,17 @@ OngoingProcesses Collection:
     "start_time": datetime,
     "status": str  # 'downloading', 'extracting', 'uploading'
 }
+
+UserSettings Collection:
+{
+    "user_id": int,  # unique
+    "upload_as_document": bool,  # True for document, False for media
+    "custom_caption": str or None,  # Caption template with variables
+    "caption_entities": list or None,  # Telegram MessageEntity objects for formatting
+    "thumbnail": str or None,  # file_id of thumbnail image
+    "caption_replacements": str,  # Pipe-separated: "old:new | word"
+    "filename_replacements": str,  # Pipe-separated: "old:new | word"
+    "filename_prefix": str or None,  # Prefix (space added automatically)
+    "filename_suffix": str or None  # Suffix (space added automatically, before extension)
+}
 """

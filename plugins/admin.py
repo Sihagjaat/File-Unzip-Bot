@@ -135,7 +135,7 @@ async def generate_codes_callback(client: Client, callback_query: CallbackQuery)
         return
 
 
-@Client.on_message(filters.text & filters.private & ~filters.command(["start", "help", "unzip", "myplan", "premium", "redeem", "cancel", "admin", "generate", "listcodes", "broadcast", "exportusers", "processes", "addpremium", "removepremium", "addforcesub", "removeforcesub", "listforcesub", "setlogchannel", "stats", "premiumusers", "setupi"]))
+@Client.on_message(filters.text & filters.private & ~filters.command(["start", "help", "unzip", "myplan", "premium", "redeem", "cancel", "admin", "generate", "listcodes", "broadcast", "exportusers", "processes", "addpremium", "removepremium", "addforcesub", "removeforcesub", "listforcesub", "setlogchannel", "stats", "premiumusers", "setupi", "settings"]))
 async def handle_code_count(client: Client, message: Message):
     """Handle code count input"""
     user_id = message.from_user.id
