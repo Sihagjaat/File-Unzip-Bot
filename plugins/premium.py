@@ -251,7 +251,7 @@ async def purchase_callback(client: Client, callback_query: CallbackQuery):
         
         # Admin contact button
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📤 Send Payment Proof to Admin", url="https://t.me/tataa_sumo")],
+            [InlineKeyboardButton("📤 Send Payment Proof to Admin", url="https://t.me/LuciferJaat8")],
             [InlineKeyboardButton("⬅️ Back", callback_data="buy_back_qr")],
             [InlineKeyboardButton("❌ Cancel", callback_data="buy_cancel")]
         ])
@@ -301,7 +301,7 @@ async def purchase_callback(client: Client, callback_query: CallbackQuery):
         plan_name = "Premium" if plan_type == "premium" else "Ultra Premium"
         
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("💬 Contact Admin", url="https://t.me/tataa_sumo")],
+            [InlineKeyboardButton("💬 Contact Admin", url="https://t.me/LuciferJaat8")],
             [InlineKeyboardButton("⬅️ Back", callback_data="buy_back")],
             [InlineKeyboardButton("❌ Cancel", callback_data="buy_cancel")]
         ])
