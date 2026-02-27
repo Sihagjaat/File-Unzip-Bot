@@ -14,6 +14,17 @@ import asyncio
 
 # Track last progress update time per user
 last_progress_update = {}
+AUTO_DELETE_DELAY_SECONDS = 30 * 60
+
+
+async def auto_delete_messages(client: Client, chat_id: int, message_ids: list, delay_seconds: int = AUTO_DELETE_DELAY_SECONDS):
+    """Delete bot-sent messages from user chat after the configured delay."""
+    await asyncio.sleep(delay_seconds)
+    for msg_id in message_ids:
+        try:
+            await client.delete_messages(chat_id=chat_id, message_ids=msg_id)
+        except Exception:
+            pass
 
 
 async def progress_callback(current, total, message, start_time, user_id, action="Downloading"):
@@ -358,6 +369,15 @@ async def handle_file_extraction(client: Client, message: Message, file_message:
         
         # Send files
         total_files = len(extracted_files)
+        delete_after_ids = []
+
+        disclaimer_msg = await message.reply_text(
+            "⚠️ **Important Notice**\n\n"
+            "Extracted files will be **auto-deleted after 30 minutes** from this chat.\n"
+            "Please forward/save them before expiry."
+        )
+        delete_after_ids.append(disclaimer_msg.id)
+
         await status_msg.edit_text(
             f"📤 **Uploading Files**\n\n"
             f"{'░' * 20} 0%\n"
@@ -489,6 +509,7 @@ async def handle_file_extraction(client: Client, message: Message, file_message:
                 
                 # Only count as sent after successful delivery to user
                 sent_count += 1
+                delete_after_ids.append(sent_msg.id)
                 
                 # Update progress bar
                 progress_percentage = (sent_count / total_files) * 100
@@ -523,13 +544,17 @@ async def handle_file_extraction(client: Client, message: Message, file_message:
         
         # Increment quota
         increment_user_quota(user_id, file_name, file_size)
+
+        if delete_after_ids:
+            asyncio.create_task(auto_delete_messages(client, user_id, delete_after_ids))
         
         # Success message
         await status_msg.edit_text(
             f"✅ **Extraction Complete!**\n\n"
             f"**Archive:** `{file_name}`\n"
             f"**Extracted:** {len(extracted_files)} file(s)\n\n"
-            f"All files have been sent!"
+            f"All files have been sent!\n"
+            f"🗑️ Auto-delete is enabled (30 minutes)."
         )
     
     except Exception as e:
